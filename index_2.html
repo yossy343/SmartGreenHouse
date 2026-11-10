@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Greenhouse Light & DLI Monitoring System</title>
+    <link rel="stylesheet" href="style_2.css">
+</head>
+<body>
+
+    <div class="header">
+        <h1>Greenhouse Light & DLI Monitoring System</h1>
+        <div id="statusBox" class="status-box">
+            <span id="statusTitle">กำลังเชื่อมต่อ...</span>
+            <span id="statusTime">-</span>
+        </div>
+    </div>
+
+    <!-- TAB NAVIGATION -->
+    <div class="tab-nav">
+        <button class="tab-btn active" onclick="switchTab('dashboard', event)">Real-time & Daily Dashboard</button>
+        <button class="tab-btn" onclick="switchTab('summary', event)">Daily Light Summary (ประวัติรายวัน)</button>
+    </div>
+
+    <!-- ================= TAB 1: DASHBOARD ================= -->
+    <div id="tab-dashboard" class="tab-content active">
+        <!-- CONTROL PANEL -->
+        <div class="controls">
+            <div class="form-group">
+                <label for="greenhouseSelect">โรงเรือน (Greenhouse):</label>
+                <select id="greenhouseSelect"><option value="">กำลังโหลด...</option></select>
+            </div>
+
+            <div class="form-group">
+                <label for="sensorSelect">เซนเซอร์ (Sensor):</label>
+                <select id="sensorSelect"><option value="">กำลังโหลด...</option></select>
+            </div>
+
+            <div class="form-group">
+                <label for="dliTargetInput">DLI Target (mol/m²/d):</label>
+                <input type="number" id="dliTargetInput" step="0.1" min="0.1" value="15" placeholder="เช่น 15.0">
+                <small id="dliSaveStatus"></small>
+            </div>
+
+            <!-- เพิ่ม Textbox กรอกจำนวนหลอดไฟ และ กำลังไฟต่อหลอด -->
+            <div class="form-group">
+                <label for="lampCountInput">จำนวนหลอดไฟ (หลอด):</label>
+                <input type="number" id="lampCountInput" step="1" min="0" value="0" placeholder="เช่น 10">
+            </div>
+
+            <div class="form-group">
+                <label for="lampWattInput">กำลังไฟต่อหลอด (วัตต์):</label>
+                <input type="number" id="lampWattInput" step="1" min="0" value="0" placeholder="เช่น 100">
+            </div>
+
+            <div class="form-group">
+                <label for="displayModeSelect">การแสดงผลบนกราฟ:</label>
+                <select id="displayModeSelect">
+                    <option value="separated">แยกข้อมูล (Sensor 1 / Sensor 2 / Combined)</option>
+                    <option value="combined">แสดงเฉพาะค่ารวม (Combined)</option>
+                    <option value="natural">แสดงเฉพาะแสงธรรมชาติ (Sensor 1)</option>
+                    <option value="supplement">แสดงเฉพาะแสงเสริม (Sensor 2)</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="dateSelect">วันที่เลือก:</label>
+                <input type="date" id="dateSelect">
+            </div>
+
+            <div class="form-group">
+                <label for="refreshSelect">Auto Refresh:</label>
+                <select id="refreshSelect">
+                    <option value="10000">ทุก 10 วินาที</option>
+                    <option value="30000" selected>ทุก 30 วินาที</option>
+                    <option value="60000">ทุก 1 นาที</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>&nbsp;</label>
+                <button id="refreshButton" class="btn-refresh" onclick="manualRefresh()">Refresh</button>
+            </div>
+        </div>
+
+        <!-- METRICS CARDS -->
+        <div class="cards-grid">
+            <!-- Sensor 1 (Natural Light) -->
+            <div class="card sensor1">
+                <div class="card-title">
+                    <span>Sensor 1 (Natural Light)</span>
+                </div>
+                <div class="metric-group">
+                    <div class="metric-item"><span class="metric-label">Lux</span><span id="s1Lux" class="metric-value">-</span></div>
+                    <div class="metric-item"><span class="metric-label">PPFD (&micro;mol/m&sup2;/s)</span><span id="s1PPFD" class="metric-value">-</span></div>
+                    <div class="metric-item"><span class="metric-label">DLI Accum (mol)</span><span id="s1DLI" class="metric-value">-</span></div>
+                    <div class="metric-item"><span class="metric-label">Delta DLI</span><span id="s1DeltaDLI" class="metric-value" style="font-size:0.9rem;">-</span></div>
+                </div>
+                <div class="progress-container">
+                    <div class="progress-label">
+                        <span>Natural Share (สัดส่วน): <strong id="s1ShareText">0%</strong></span>
+                    </div>
+                    <div class="progress-bar-bg"><div id="s1ShareBar" class="progress-bar-fill s1-fill"></div></div>
+                </div>
+            </div>
+
+            <!-- Sensor 2 (Supplemental Light) -->
+            <div class="card sensor2">
+                <div class="card-title">
+                    <span>Sensor 2 (Supplemental Light)</span>
+                    <span id="relayStatusBadge" class="status-badge badge-off">OFF</span>
+                </div>
+                <div class="metric-group">
+                    <div class="metric-item"><span class="metric-label">Lux</span><span id="s2Lux" class="metric-value">-</span></div>
+                    <div class="metric-item"><span class="metric-label">PPFD (&micro;mol/m&sup2;/s)</span><span id="s2PPFD" class="metric-value">-</span></div>
+                    <div class="metric-item"><span class="metric-label">Intensity Level</span><span id="s2Intensity" class="metric-value">0%</span></div>
+                    <div class="metric-item"><span class="metric-label">DLI Accum (mol)</span><span id="s2DLI" class="metric-value">-</span></div>
+                </div>
+                <div class="progress-container">
+                    <div class="progress-label">
+                        <span>Supplement Share (สัดส่วน): <strong id="s2ShareText">0%</strong></span>
+                    </div>
+                    <div class="progress-bar-bg"><div id="s2ShareBar" class="progress-bar-fill s2-fill"></div></div>
+                </div>
+            </div>
+
+            <!-- Combined -->
+            <div class="card combined">
+                <div class="card-title">
+                    <span>Combined Light Source</span>
+                </div>
+                <div class="metric-group">
+                    <div class="metric-item"><span class="metric-label">Total Lux</span><span id="combLux" class="metric-value">-</span></div>
+                    <div class="metric-item"><span class="metric-label">Total PPFD</span><span id="combPPFD" class="metric-value">-</span></div>
+                    <div class="metric-item"><span class="metric-label">Total DLI Today</span><span id="combDLI" class="metric-value">-</span></div>
+                    <div class="metric-item"><span class="metric-label">Last Updated</span><span id="lastUpdate" class="metric-value" style="font-size:0.85rem;">-</span></div>
+                </div>
+                <div class="progress-container">
+                    <div class="progress-label">
+                        <span>Target Progress: <strong id="combProgressText">0%</strong></span>
+                        <span>Remaining: <strong id="combRemDLI">-</strong> DLI</span>
+                    </div>
+                    <div class="progress-bar-bg"><div id="combProgressBar" class="progress-bar-fill comb-fill"></div></div>
+                </div>
+            </div>
+
+            <!-- Energy Monitoring Card -->
+            <div class="card energy">
+                <div class="card-title">
+                    <span>⚡ Energy Monitoring (วันนี้)</span>
+                    <span id="powerStatusBadge" class="status-badge badge-off">0 W</span>
+                </div>
+                <div class="metric-group">
+                    <div class="metric-item"><span class="metric-label">เวลาเปิดไฟเสริม</span><span id="s2OnHours" class="metric-value">0.0 ชม.</span></div>
+                    <div class="metric-item"><span class="metric-label">กำลังไฟที่ใช้ ณ ปัจจุบัน</span><span id="currentPowerWatt" class="metric-value" style="color: #f59e0b;">0 W</span></div>
+                    <div class="metric-item"><span class="metric-label">ความสว่างเฉลี่ย</span><span id="s2AvgDimming" class="metric-value">0%</span></div>
+                    <div class="metric-item"><span class="metric-label">พลังงานไฟฟ้าสะสม</span><span id="s2EnergyKWh" class="metric-value" style="color:#2563eb;">0.000 kWh</span></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- CHARTS -->
+        <div class="charts-container">
+            <div class="chart-card">
+                <h3>Light Intensity History (PPFD) <span id="chartModeBadge" style="font-size:0.8rem; color:#2e7d32; font-weight:normal;"></span></h3>
+                <canvas id="lightChart"></canvas>
+            </div>
+            <div class="chart-card">
+                <h3>Daily Light Integral (DLI) Accumulation</h3>
+                <canvas id="dliChart"></canvas>
+            </div>
+        </div>
+
+        <!-- DAILY STATISTICS -->
+        <div class="stats-table-card">
+            <h3>สรุปสถิติประจำวัน (Daily Summary Statistics) - <span id="recordCount">0</span> รายการ</h3>
+            <br>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Source</th>
+                        <th>Lux Min</th>
+                        <th>Lux Avg</th>
+                        <th>Lux Max</th>
+                        <th>PPFD Min</th>
+                        <th>PPFD Avg</th>
+                        <th>PPFD Max</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Sensor 1 (Natural)</strong></td>
+                        <td id="s1LuxMin">-</td><td id="s1LuxAvg">-</td><td id="s1LuxMax">-</td>
+                        <td id="s1PPFDMin">-</td><td id="s1PPFDAvg">-</td><td id="s1PPFDMax">-</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Sensor 2 (Supplement)</strong></td>
+                        <td id="s2LuxMin">-</td><td id="s2LuxAvg">-</td><td id="s2LuxMax">-</td>
+                        <td id="s2PPFDMin">-</td><td id="s2PPFDAvg">-</td><td id="s2PPFDMax">-</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Combined Source</strong></td>
+                        <td id="combLuxMin">-</td><td id="combLuxAvg">-</td><td id="combLuxMax">-</td>
+                        <td id="combPPFDMin">-</td><td id="combPPFDAvg">-</td><td id="combPPFDMax">-</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <!-- DAILY DLI SUMMARY BOX -->
+            <div class="summary-box">
+                <div class="summary-item">
+                    <span class="title">สรุป DLI แสงธรรมชาติสะสมวันนี้:</span>
+                    <span id="sumNaturalDLI" class="val">- mol/m²/d</span>
+                </div>
+                <div class="summary-item">
+                    <span class="title">สรุป DLI แสงเสริมสะสมวันนี้:</span>
+                    <span id="sumSupplementDLI" class="val">- mol/m²/d</span>
+                </div>
+                <div class="summary-item">
+                    <span class="title">สรุป DLI รวมสะสมทั้งสิ้นประจำวันนี้:</span>
+                    <span id="sumTotalDLI" class="val" style="color:#2563eb;">- mol/m²/d</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= TAB 2: DAILY LIGHT SUMMARY ================= -->
+    <div id="tab-summary" class="tab-content">
+        <div class="stats-table-card">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 15px;">
+                <h3>รายงานสรุปข้อมูลย้อนหลัง (Daily Light & Energy Summary Archive)</h3>
+                <button class="btn-refresh" onclick="syncAndLoadSummaryTable()">โหลดข้อมูลสรุปย้อนหลัง</button>
+            </div>
+            <div style="overflow-x: auto;">
+                <table id="summaryArchiveTable">
+                    <thead>
+                        <tr>
+                            <th>วันที่ (Date)</th>
+                            <th>โรงเรือน ID</th>
+                            <th>S1 DLI (mol)</th>
+                            <th>S2 DLI (mol)</th>
+                            <th>Combined DLI (mol)</th>
+                            <th>Target_DLI</th>
+                            <th>เวลาเปิดไฟ (ชม.)</th>
+                            <th>ความสว่างเฉลี่ย (%)</th>
+                            <th>power_consumption (kWh)</th>
+                            <th>Combined Lux (Min / Avg / Max)</th>
+                            <th>อัปเดตล่าสุด</th>
+                        </tr>
+                    </thead>
+                    <tbody id="summaryArchiveTableBody">
+                        <tr><td colspan="11" style="text-align: center; color: var(--text-muted);">กรุณากดปุ่ม "โหลดข้อมูลสรุปย้อนหลัง" เพื่อแสดงข้อมูล</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="footer">
+        <p>Greenhouse Automation System • Connected to Supabase Project: umkubfawtnkdrwtprbnj</p>
+    </div>
+
+    <script src="app_2.js"></script>
+</body>
+</html>
